@@ -8,7 +8,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { API } from "tsgo-api/unstable/async";
 
-import type { PrettifyOptions } from "@prettify-ts7/typescript-plugin/src/request";
+import type { PrettifyOptions } from "../../packages/typescript-plugin/src/request";
 import { getTypeInfoAtPosition } from "../../packages/vscode-extension/src/tsgo/type-tree";
 import { prettyPrintTypeString, stringifyTypeTree } from "../../packages/vscode-extension/src/stringify-type-tree";
 
@@ -48,7 +48,10 @@ const knownDifferences: Record<string, string> = {
 /** Extra cases for behavior the VS Code suite doesn't cover, in workspace/tsgo-extra.ts */
 const extraCases: TestCase[] = [
   { keyword: "TsgoUser(1)", expected: "function TsgoUser(id: number, name?: string): TsgoUser" },
-  { keyword: "tsgoInstance", expected: "const tsgoInstance: { readonly id: number; name?: string; greet: () => string; }" },
+  {
+    keyword: "tsgoInstance",
+    expected: "const tsgoInstance: { readonly id: number; name?: string; greet: () => string; }",
+  },
   { keyword: "tsgoLet", expected: "let tsgoLet: { a: number; b: string; }" },
   { keyword: "tsgoVar", expected: "var tsgoVar: number[]" },
   { keyword: "TsgoPartial", expected: "type TsgoPartial = { a?: number; b?: string; }" },
@@ -69,7 +72,8 @@ function readCases(): TestCase[] {
   const suiteCases = [...source.matchAll(pattern)].map(([, keyword, literal]) => ({
     file: "types.ts",
     keyword: keyword!,
-    expected: new Function(`return ${literal}`)() as string,
+    // Unwrap the template literal: drop the backticks and unescape \` and \${
+    expected: literal!.slice(1, -1).replace(/\\(.)/g, "$1"),
     knownDifference: knownDifferences[keyword!],
   }));
   return [...suiteCases, ...extraCases];
@@ -116,7 +120,9 @@ async function main(): Promise<void> {
   }
 
   const passed = cases.length - failures - known;
-  console.log(`\n${passed}/${cases.length} passed, ${known} known differences, ${failures} failed in ${Date.now() - started}ms`);
+  console.log(
+    `\n${passed}/${cases.length} passed, ${known} known differences, ${failures} failed in ${Date.now() - started}ms`,
+  );
   await snapshot.dispose();
   await api.close();
   process.exitCode = failures > 0 ? 1 : 0;

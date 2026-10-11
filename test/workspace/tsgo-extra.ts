@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-unused-vars, prefer-const, no-var */
 // Extra fixtures for the TypeScript 7 backend (see test/tsgo/run-type-tests.ts)
 import { type Mapped as ImportedMapped } from "./tsgo-extra-dep";
 

@@ -12,7 +12,8 @@
     "build": "pnpm -r run build",
     "build:debug": "pnpm --filter @prettify-ts7/typescript-plugin build:debug && pnpm --filter prettify-ts7 run build",
     "package": "pnpm build && pnpm --filter prettify-ts7 run package && node ./scripts/post-package.js && pnpm install",
-    "test:tsgo": "node ./test/tsgo/build.mjs && node ./packages/vscode-extension/out-tsgo-test/run-type-tests.mjs && node ./packages/vscode-extension/out-tsgo-test/run-lsp-pipe-test.mjs"
+    "test:tsgo": "node ./test/tsgo/build.mjs && node ./packages/vscode-extension/out-tsgo-test/run-type-tests.mjs && node ./packages/vscode-extension/out-tsgo-test/run-lsp-pipe-test.mjs",
+    "bench": "node ./test/tsgo/build.mjs && node ./packages/vscode-extension/out-tsgo-test/bench.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.27.0",
@@ -27,6 +28,7 @@
     "eslint-plugin-prettier": "^5.2.6",
     "fs-extra": "^11.3.0",
     "only-allow": "^1.2.1",
+    "tsgo-api": "npm:typescript@7.0.2",
     "typescript": "^5.4.5",
     "typescript-eslint": "^8.30.1"
   }

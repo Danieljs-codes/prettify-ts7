@@ -11,6 +11,9 @@ export default [
       "eslint.config.mjs", // Ignore this config file
       "test/.vscode-test.js", // Ignore VSCode test file,
       ".vscode-test/**", // Ignore all VSCode test files
+      "**/out-tsgo-test/**", // Bundled TypeScript 7 tests and benchmark
+      "test/tsgo/build.mjs", // Build script for the above
+      "bench/workspace/**", // Benchmark fixture code
     ],
   },
   ...tseslint.config(

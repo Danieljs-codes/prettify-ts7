@@ -28,11 +28,32 @@ This README is for developing Prettify TS 7. The extension README (shown on the 
 pnpm install      # Installs all dependencies
 pnpm test         # Builds and runs the extension test suite (TypeScript 6 path)
 pnpm test:tsgo    # Runs the hover tests against TypeScript 7, plus an LSP API pipe check
+pnpm bench [name] # Benchmarks TypeScript 7 hovers; saves bench/results/<name>.json
 pnpm build        # Compiles the codebase
 pnpm package      # Builds + prepares the VSIX package for publishing
 ```
 
 You do **not** need to build manually — `test` and `package` handles build steps automatically.
+
+
+## Benchmark
+
+`pnpm bench` runs the same path as VS Code: a `tsc --lsp` server, the API pipe, and `TsgoHoverSession`. It hovers each case in `bench/workspace/cases.ts` 20 times after 3 warmup rounds. It reports the median, p90, and min time, the API request count, and the bytes received. Each run is compared to `bench/results/baseline.json`, and it fails if any hover's output changes. `pnpm bench --breakdown <case>` lists requests by method.
+
+- **median**: a hover right after an edit, with nothing cached
+- **repeat**: hovering the same symbol again without edits
+- **cold first hover**: the first hover on a fresh server
+
+Run-to-run noise is about ±3% for warm hovers and about ±12% for cold ones.
+
+| | baseline | now |
+|---|---|---|
+| DOM element (`document.createElement("div")`) | 518 ms | 80 ms |
+| Overloaded function (`document.addEventListener`) | 387 ms | 20 ms |
+| `window` | 177 ms | 49 ms |
+| Sum of medians, 9 cases | 1119 ms | 168 ms |
+| Cold first hover | 9.9 s | 0.17 s |
+| Repeat hover | same as median | <0.1 ms |
 
 
 ## Testing

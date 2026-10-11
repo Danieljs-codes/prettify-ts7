@@ -86,6 +86,9 @@ export type PrettifyResponse = ts.WithMetadata<ts.CompletionInfo> & {
  */
 export function isPrettifyRequest(request: PrettifyCompletionsTriggerCharacter): request is PrettifyRequest {
   return (
-    !!request && typeof request === "object" && "meta" in request && request["meta"] === "prettify-ts7-type-info-request"
+    !!request &&
+    typeof request === "object" &&
+    "meta" in request &&
+    request["meta"] === "prettify-ts7-type-info-request"
   );
 }

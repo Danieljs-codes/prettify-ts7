@@ -6,7 +6,14 @@
  * call is a round trip, so the logic mirrors the plugin but is async.
  */
 import type { Checker, Project, Signature, Symbol, Type, TypeReference } from "tsgo-api/unstable/async";
-import { ElementFlags, ModifierFlags, SignatureKind, SymbolFlags, TypeFlags } from "tsgo-api/unstable/async";
+import {
+  ElementFlags,
+  ModifierFlags,
+  ObjectFlags,
+  SignatureKind,
+  SymbolFlags,
+  TypeFlags,
+} from "tsgo-api/unstable/async";
 import type { Node, SourceFile } from "tsgo-api/unstable/ast";
 import {
   NodeFlags,
@@ -42,11 +49,107 @@ const CheckFlagsReadonly = 1 << 3;
 
 type DeclarationHandle = NonNullable<Symbol["valueDeclaration"]>;
 
-type Context = {
+/**
+ * Checker queries memoized for one hover. Large types repeat the same member types many
+ * times (e.g. every `on*` handler on a DOM element), and each query is a round trip.
+ * Keyed by object id, which is stable within a snapshot.
+ */
+class CachedChecker {
+  private readonly cache = new Map<string, Promise<unknown>>();
+
+  constructor(readonly checker: Checker) {}
+
+  private memo<T>(key: string, query: () => Promise<T>): Promise<T> {
+    let result = this.cache.get(key) as Promise<T> | undefined;
+    if (!result) {
+      result = query();
+      this.cache.set(key, result);
+    }
+    return result;
+  }
+
+  typeToString(type: Type, flags = 0): Promise<string> {
+    return this.memo(`typeToString:${type.id}:${flags}`, () => this.checker.typeToString(type, undefined, flags));
+  }
+  getApparentType(type: Type): Promise<Type | undefined> {
+    return this.memo(`apparent:${type.id}`, () => this.checker.getApparentType(type));
+  }
+  getBaseConstraintOfType(type: Type): Promise<Type | undefined> {
+    return this.memo(`constraint:${type.id}`, () => this.checker.getBaseConstraintOfType(type));
+  }
+  getCallSignatures(type: Type): Promise<readonly Signature[]> {
+    return this.memo(`call:${type.id}`, () => this.checker.getSignaturesOfType(type, SignatureKind.Call));
+  }
+  isTupleType(type: Type): Promise<boolean> {
+    return this.memo(`tuple:${type.id}`, () => this.checker.isTupleType(type));
+  }
+  isArrayType(type: Type): Promise<boolean> {
+    return this.memo(`array:${type.id}`, () => this.checker.isArrayType(type));
+  }
+  getTypeArguments(type: TypeReference): Promise<readonly Type[]> {
+    return this.memo(`typeArguments:${type.id}`, () => this.checker.getTypeArguments(type));
+  }
+  getPropertiesOfType(type: Type): Promise<readonly Symbol[]> {
+    return this.memo(`properties:${type.id}`, () => this.checker.getPropertiesOfType(type));
+  }
+  getIndexInfosOfType(type: Type): ReturnType<Checker["getIndexInfosOfType"]> {
+    return this.memo(`indexInfos:${type.id}`, () => this.checker.getIndexInfosOfType(type));
+  }
+  getReturnTypeOfSignature(signature: Signature): Promise<Type | undefined> {
+    return this.memo(`returnType:${signature.id}`, () => this.checker.getReturnTypeOfSignature(signature));
+  }
+  getParameters(signature: Signature): Promise<readonly Symbol[]> {
+    return this.memo(`parameters:${signature.id}`, () => signature.getParameters());
+  }
+  getTypeOfSymbol(symbol: Symbol): Promise<Type | undefined> {
+    return this.memo(`typeOfSymbol:${symbol.id}`, () => this.checker.getTypeOfSymbol(symbol));
+  }
+  /** Types of many symbols in one round trip, sharing the cache with getTypeOfSymbol */
+  getTypesOfSymbols(symbols: readonly Symbol[]): Promise<(Type | undefined)[]> {
+    const missing = symbols.filter((symbol) => !this.cache.has(`typeOfSymbol:${symbol.id}`));
+    if (missing.length > 0) {
+      const batch = this.checker.getTypeOfSymbol(missing);
+      missing.forEach((symbol, index) => {
+        this.cache.set(
+          `typeOfSymbol:${symbol.id}`,
+          batch.then((types) => types[index]),
+        );
+      });
+    }
+    return Promise.all(symbols.map((symbol) => this.getTypeOfSymbol(symbol)));
+  }
+  getSymbolOfType(type: Type): Promise<Symbol | undefined> {
+    return this.memo(`symbolOfType:${type.id}`, () => type.getSymbol());
+  }
+  getTypesOfUnion(
+    type: Type & { getTypes(): Promise<readonly Type[] | undefined> },
+  ): Promise<readonly Type[] | undefined> {
+    return this.memo(`types:${type.id}`, () => type.getTypes());
+  }
+  getTarget(type: TypeReference): Promise<Type> {
+    return this.memo(`target:${type.id}`, () => type.getTarget());
+  }
+}
+
+/**
+ * Query results for one project in one snapshot. Valid for as long as the snapshot is,
+ * so it can be shared by every hover until something changes.
+ */
+export type ProjectQueryCache = {
+  cached: CachedChecker;
+  resolvedDeclarations: Map<DeclarationHandle, Promise<Node | undefined>>;
+  /** First declaration resolved in each file, which fetches the file into the API's cache */
+  fileFetches: Map<string, Promise<unknown>>;
+};
+
+export function createProjectQueryCache(project: Project): ProjectQueryCache {
+  return { cached: new CachedChecker(project.checker), resolvedDeclarations: new Map(), fileFetches: new Map() };
+}
+
+type Context = ProjectQueryCache & {
   checker: Checker;
   project: Project;
   options: PrettifyOptions;
-  resolvedDeclarations: Map<DeclarationHandle, Promise<Node | undefined>>;
 };
 
 /**
@@ -63,8 +166,9 @@ export async function getTypeInfoAtPosition(
   sourceFile: SourceFile,
   position: number,
   options: PrettifyOptions,
+  cache: ProjectQueryCache = createProjectQueryCache(project),
 ): Promise<TsgoTypeInfo | undefined> {
-  const context: Context = { checker: project.checker, project, options, resolvedDeclarations: new Map() };
+  const context: Context = { ...cache, checker: project.checker, project, options };
   const { checker } = context;
 
   const node = getTouchingPropertyName(sourceFile, position);
@@ -157,29 +261,48 @@ function getVariableDeclarationKind(node: Node): SyntaxKind {
 }
 
 /**
- * Resolve a declaration handle to its AST node, once per request
+ * Resolve a declaration handle to its AST node, once per snapshot.
+ *
+ * Resolving fetches the declaration's whole source file. The API caches files, but
+ * concurrent resolves in an uncached file each fetch it (e.g. hundreds of lib.dom.d.ts
+ * members on a DOM type, ~4MB each), so later resolves in a file wait for the first.
  */
 function resolveDeclaration(context: Context, handle: DeclarationHandle | undefined): Promise<Node | undefined> {
   if (!handle) return Promise.resolve(undefined);
 
   let resolved = context.resolvedDeclarations.get(handle);
   if (!resolved) {
-    resolved = handle.resolve(context.project).catch(() => undefined);
+    const fileFetch = context.fileFetches.get(handle.path);
+    const resolve = () => handle.resolve(context.project).catch(() => undefined);
+    resolved = fileFetch ? fileFetch.then(resolve) : resolve();
+    if (!fileFetch) context.fileFetches.set(handle.path, resolved);
     context.resolvedDeclarations.set(handle, resolved);
   }
   return resolved;
 }
 
+async function getParameterTypeInfos(
+  context: Context,
+  parameters: readonly Symbol[],
+  depth: number,
+  visited: Set<number>,
+): Promise<TypeFunctionSignature["parameters"]> {
+  const parameterTypes = await context.cached.getTypesOfSymbols(parameters);
+  return Promise.all(
+    parameters.map((parameter, index) =>
+      getParameterTypeInfo(context, parameter, parameterTypes[index], depth, new Set(visited)),
+    ),
+  );
+}
+
 async function getParameterTypeInfo(
   context: Context,
   parameter: Symbol,
+  parameterType: Type | undefined,
   depth: number,
   visited: Set<number>,
 ): Promise<TypeFunctionSignature["parameters"][number]> {
-  const [declaration, parameterType] = await Promise.all([
-    resolveDeclaration(context, parameter.valueDeclaration ?? parameter.declarations[0]),
-    context.checker.getTypeOfSymbol(parameter),
-  ]);
+  const declaration = await resolveDeclaration(context, parameter.valueDeclaration ?? parameter.declarations[0]);
 
   const isParameter = !!declaration && isParameterDeclaration(declaration);
 
@@ -195,8 +318,8 @@ async function getParameterTypeInfo(
  * Get type information for a constructor type
  */
 async function getConstructorTypeInfo(context: Context, signature: Signature, name: string): Promise<TypeTree> {
-  const params = await signature.getParameters();
-  const parameters = await Promise.all(params.map((p) => getParameterTypeInfo(context, p, 0, new Set())));
+  const params = await context.cached.getParameters(signature);
+  const parameters = await getParameterTypeInfos(context, params, 0, new Set());
 
   return {
     kind: "function",
@@ -219,21 +342,29 @@ function anyTypeTree(): TypeTree {
  * Recursively get type information by building a TypeTree object from the given type
  */
 async function getTypeTree(context: Context, type: Type, depth: number, visited: Set<number>): Promise<TypeTree> {
-  const { checker, options } = context;
+  const { cached, options } = context;
+
+  // Primitive types
+  if (isPrimitiveType(type)) {
+    return { kind: "primitive", typeName: await cached.typeToString(type, NoTruncation) };
+  }
+
+  // Skip round trips whose answers follow from the type's flags (mirrors the checker):
+  // the apparent type of a union or non-mapped object type is the type itself, and only
+  // generic types and unions/intersections can have a primitive base constraint
+  const apparentIsSelf =
+    (type.flags & TypeFlags.Union) !== 0 ||
+    ((type.flags & TypeFlags.Object) !== 0 && (getObjectFlags(type) & ObjectFlags.Mapped) === 0);
+  const mayHavePrimitiveConstraint = (type.flags & (TypeFlags.Instantiable | TypeFlags.UnionOrIntersection)) !== 0;
 
   const [typeName, apparentTypeOrUndefined, baseConstraintType] = await Promise.all([
-    checker.typeToString(type, undefined, NoTruncation),
-    checker.getApparentType(type),
-    checker.getBaseConstraintOfType(type),
+    cached.typeToString(type, NoTruncation),
+    apparentIsSelf ? type : cached.getApparentType(type),
+    mayHavePrimitiveConstraint ? cached.getBaseConstraintOfType(type) : undefined,
   ]);
   const apparentType = apparentTypeOrUndefined ?? type;
 
-  // Primitive types
-  if (
-    isPrimitiveType(type) ||
-    isPrimitiveType(apparentType) ||
-    (baseConstraintType && isPrimitiveType(baseConstraintType))
-  ) {
+  if (isPrimitiveType(apparentType) || (baseConstraintType && isPrimitiveType(baseConstraintType))) {
     return { kind: "primitive", typeName };
   }
 
@@ -250,7 +381,7 @@ async function getTypeTree(context: Context, type: Type, depth: number, visited:
 
     return {
       kind: "reference",
-      typeName: await checker.typeToString(apparentType, undefined, NoTruncation),
+      typeName: await cached.typeToString(apparentType, NoTruncation),
     };
   }
 
@@ -258,7 +389,7 @@ async function getTypeTree(context: Context, type: Type, depth: number, visited:
 
   // Unions
   if (apparentType.isUnionType()) {
-    const memberTypes = (await apparentType.getTypes()) ?? [];
+    const memberTypes = (await cached.getTypesOfUnion(apparentType)) ?? [];
     const excessMembers = Math.max(0, memberTypes.length - options.maxUnionMembers);
     const types = await Promise.all(
       memberTypes
@@ -270,8 +401,8 @@ async function getTypeTree(context: Context, type: Type, depth: number, visited:
     return { kind: "union", typeName, excessMembers, types };
   }
 
-  // Enums
-  const typeSymbol = await type.getSymbol();
+  // Enums (only enum literal types can be enum members, so skip the symbol fetch otherwise)
+  const typeSymbol = type.flags & TypeFlags.EnumLiteral ? await cached.getSymbolOfType(type) : undefined;
   if (typeSymbol && typeSymbol.flags & SymbolFlags.EnumMember) {
     const parent = await typeSymbol.getParent();
     if (parent) {
@@ -280,7 +411,7 @@ async function getTypeTree(context: Context, type: Type, depth: number, visited:
   }
 
   // Functions
-  const callSignatures = await checker.getSignaturesOfType(apparentType, SignatureKind.Call);
+  const callSignatures = await cached.getCallSignatures(apparentType);
   if (callSignatures.length > 0) {
     if (!options.unwrapFunctions) {
       depth = options.maxDepth;
@@ -289,13 +420,13 @@ async function getTypeTree(context: Context, type: Type, depth: number, visited:
     const signatures: TypeFunctionSignature[] = await Promise.all(
       callSignatures.slice(0, options.maxFunctionSignatures).map(async (signature) => {
         const [returnType, params] = await Promise.all([
-          checker.getReturnTypeOfSignature(signature),
-          signature.getParameters(),
+          cached.getReturnTypeOfSignature(signature),
+          cached.getParameters(signature),
         ]);
 
         const [returnTypeTree, parameters] = await Promise.all([
           returnType ? getTypeTree(context, returnType, depth, new Set(visited)) : anyTypeTree(),
-          Promise.all(params.map((p) => getParameterTypeInfo(context, p, depth, new Set(visited)))),
+          getParameterTypeInfos(context, params, depth, visited),
         ]);
 
         return { returnType: returnTypeTree, parameters };
@@ -308,9 +439,12 @@ async function getTypeTree(context: Context, type: Type, depth: number, visited:
     return { kind: "function", excessSignatures, typeName, signatures };
   }
 
+  // Tuples and arrays are always type references
+  const isReference = apparentType.isTypeReference();
+
   // Tuples
-  if (await checker.isTupleType(apparentType)) {
-    const target = (apparentType.isTypeReference() ? await apparentType.getTarget() : undefined) as
+  if (isReference && (await cached.isTupleType(apparentType))) {
+    const target = (apparentType.isTypeReference() ? await cached.getTarget(apparentType) : undefined) as
       | { readonly?: boolean; elementFlags?: readonly ElementFlags[] }
       | undefined;
 
@@ -320,26 +454,26 @@ async function getTypeTree(context: Context, type: Type, depth: number, visited:
     if (hasNonRequiredElements || /^(readonly )?\[\s*[\w$]+\??:/.test(typeName)) {
       return {
         kind: "reference",
-        typeName: await checker.typeToString(apparentType, undefined, NoTruncation | InTypeAlias),
+        typeName: await cached.typeToString(apparentType, NoTruncation | InTypeAlias),
       };
     }
 
     const readonly = target?.readonly ?? false;
-    const typeArguments = await checker.getTypeArguments(apparentType as TypeReference);
+    const typeArguments = await cached.getTypeArguments(apparentType);
     const elementTypes = await Promise.all(typeArguments.map((t) => getTypeTree(context, t, depth, new Set(visited))));
 
     return { kind: "tuple", typeName, readonly, elementTypes };
   }
 
   // Arrays
-  if (await checker.isArrayType(apparentType)) {
+  if (isReference && (await cached.isArrayType(apparentType))) {
     if (!options.unwrapArrays) {
       depth = options.maxDepth;
     }
 
     const [typeArguments, arraySymbol] = await Promise.all([
-      checker.getTypeArguments(apparentType as TypeReference),
-      apparentType.getSymbol(),
+      cached.getTypeArguments(apparentType),
+      cached.getSymbolOfType(apparentType),
     ]);
     const arrayType = typeArguments[0];
     const elementType = arrayType ? await getTypeTree(context, arrayType, depth, new Set(visited)) : anyTypeTree();
@@ -354,12 +488,12 @@ async function getTypeTree(context: Context, type: Type, depth: number, visited:
 
   // Generics
   if (type.isTypeReference()) {
-    const typeArguments = await checker.getTypeArguments(type);
+    const typeArguments = await cached.getTypeArguments(type);
 
     if (typeArguments.length > 0) {
       // Get the target type name without generic parameters
       // Ex: Promise<T> => Promise
-      const fullTargetTypeName = await checker.typeToString(await type.getTarget(), undefined, NoTruncation);
+      const fullTargetTypeName = await cached.typeToString(await cached.getTarget(type), NoTruncation);
       const targetTypeName = fullTargetTypeName.split("<")[0]?.trim() ?? fullTargetTypeName;
 
       // Skip generic types that are in the skippedTypeNames list, using ellipsis to indicate generic parameters
@@ -378,7 +512,13 @@ async function getTypeTree(context: Context, type: Type, depth: number, visited:
   }
 
   // Object
-  let typeProperties = await checker.getPropertiesOfType(apparentType);
+  // At max depth a named type is shown as its name whether or not it's an object,
+  // so skip fetching its properties (often hundreds, e.g. DOM types)
+  if (depth >= options.maxDepth && !typeName.includes("{")) {
+    return { kind: "reference", typeName };
+  }
+
+  let typeProperties = await cached.getPropertiesOfType(apparentType);
   if (apparentType.isClassOrInterface() || apparentType.flags & TypeFlags.Object || typeProperties.length > 0) {
     // Resolve how many properties to show based on the maxProperties option
     const depthMaxProps = depth >= 1 ? options.maxSubProperties : options.maxProperties;
@@ -388,7 +528,7 @@ async function getTypeTree(context: Context, type: Type, depth: number, visited:
       typeProperties = typeProperties.filter((_, index) => isPublic[index]);
     }
 
-    let indexSignatures = await checker.getIndexInfosOfType(apparentType);
+    let indexSignatures = await cached.getIndexInfosOfType(apparentType);
 
     if (depth >= options.maxDepth) {
       // If we've reached the max depth and has a type alias, return it as a reference type
@@ -415,7 +555,7 @@ async function getTypeTree(context: Context, type: Type, depth: number, visited:
       indexSignatures.map(async (indexSignature): Promise<TypeProperty> => {
         const [declaration, indexType, valueTypeTree] = await Promise.all([
           resolveDeclaration(context, indexSignature.declaration),
-          checker.typeToString(indexSignature.keyType, undefined, NoTruncation),
+          cached.typeToString(indexSignature.keyType, NoTruncation),
           getTypeTree(context, indexSignature.valueType, depth + 1, new Set(visited)),
         ]);
 
@@ -428,7 +568,7 @@ async function getTypeTree(context: Context, type: Type, depth: number, visited:
       }),
     );
 
-    const symbolTypes = typeProperties.length > 0 ? await checker.getTypeOfSymbol(typeProperties) : [];
+    const symbolTypes = await cached.getTypesOfSymbols(typeProperties);
     const namedProperties = Promise.all(
       typeProperties.map(async (symbol, index): Promise<TypeProperty> => {
         const symbolType = symbolTypes[index];
@@ -496,6 +636,11 @@ function isPrimitiveType(type: Type): boolean {
         TypeFlags.Unknown |
         TypeFlags.Any),
   );
+}
+
+/** `objectFlags` is sent for every type but isn't on the public `Type` interface */
+function getObjectFlags(type: Type): number {
+  return (type as { objectFlags?: number }).objectFlags ?? 0;
 }
 
 function getIntrinsicName(type: Type): string {
