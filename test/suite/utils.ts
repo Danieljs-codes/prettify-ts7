@@ -27,7 +27,7 @@ export async function openDocument(fileName: string): Promise<void> {
  *
  * This function works by:
  * 1. Opening a 'canary.ts' file which contains a known type (`ServerReadinessProbe`).
- * 2. Activating the 'prettify-ts' extension.
+ * 2. Activating the 'prettify-ts7' extension.
  * 3. Repeatedly triggering a hover on the `ServerReadinessProbe` type.
  * 4. Waiting until the hover content no longer shows a "loading..." message and includes
  *    detailed metadata (specifically, "a?: string" from the `ServerReadinessProbe` type).
@@ -43,7 +43,7 @@ export async function ensureTypeScriptServerReady(fileName: string, keyword: str
 
   console.log("Waiting for TypeScript server to be ready...");
 
-  const extensionId = "MylesMurphy.prettify-ts";
+  const extensionId = "danieljs-codes.prettify-ts7";
   const extension = vscode.extensions.getExtension(extensionId);
 
   assert.ok(extension, "Extension not found");
@@ -117,7 +117,7 @@ type PrettifySettings = {
  * If a setting is not provided, it will use the default value.
  */
 export async function applySettings(overrides: PrettifySettings = {}) {
-  const config = vscode.workspace.getConfiguration("prettify-ts");
+  const config = vscode.workspace.getConfiguration("prettify-ts7");
 
   const defaults: Required<PrettifySettings> = {
     enabled: true,

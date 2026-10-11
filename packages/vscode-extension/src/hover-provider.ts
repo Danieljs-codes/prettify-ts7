@@ -1,49 +1,21 @@
 import * as vscode from "vscode";
-import type { PrettifyRequest } from "@prettify-ts/typescript-plugin/src/request";
-import type { TypeInfo } from "@prettify-ts/typescript-plugin/src/type-tree/types";
 import { prettyPrintTypeString, stringifyTypeTree, sanitizeString } from "./stringify-type-tree";
+import { getPrettifyOptions, getTypeInfo } from "./type-info";
 
 export function registerHoverProvider(context: vscode.ExtensionContext): void {
   async function provideHover(
     document: vscode.TextDocument,
     position: vscode.Position,
   ): Promise<vscode.Hover | undefined> {
-    const config = vscode.workspace.getConfiguration("prettify-ts");
+    const config = vscode.workspace.getConfiguration("prettify-ts7");
     if (!config.get("enabled", true)) return;
 
     const indentation = config.get("typeIndentation", 4);
     const maxCharacters = config.get("maxCharacters", 20000);
 
-    const options = {
-      hidePrivateProperties: config.get("hidePrivateProperties", true),
-      maxDepth: config.get("maxDepth", 2),
-      maxProperties: config.get("maxProperties", 100),
-      maxSubProperties: config.get("maxSubProperties", 5),
-      maxUnionMembers: config.get("maxUnionMembers", 15),
-      maxFunctionSignatures: config.get("maxFunctionSignatures", 5),
-      skippedTypeNames: config.get("skippedTypeNames", [] as string[]),
-      unwrapArrays: config.get("unwrapArrays", true),
-      unwrapFunctions: config.get("unwrapFunctions", true),
-      unwrapGenericArgumentsTypeNames: config.get("unwrapGenericArgumentsTypeNames", [] as string[]),
-    };
+    const options = getPrettifyOptions(config);
 
-    const request: PrettifyRequest = {
-      meta: "prettify-type-info-request",
-      options,
-    };
-
-    const location = {
-      file: document.uri.fsPath,
-      line: position.line + 1,
-      offset: position.character + 1,
-    };
-
-    const response: any = await vscode.commands.executeCommand("typescript.tsserverRequest", "completionInfo", {
-      ...location,
-      triggerCharacter: request,
-    });
-
-    const prettifyResponse: TypeInfo | undefined = response?.body?.__prettifyResponse;
+    const prettifyResponse = await getTypeInfo(document, position, options);
     if (!prettifyResponse) return;
 
     const { typeTree, name } = prettifyResponse;
@@ -71,8 +43,7 @@ export function registerHoverProvider(context: vscode.ExtensionContext): void {
       declaration.startsWith("var") ||
       declaration.startsWith("function")
     ) {
-      const quickInfo: any = await vscode.commands.executeCommand("typescript.tsserverRequest", "quickinfo", location);
-      const quickInfoDisplayString: string = quickInfo?.body?.displayString;
+      const quickInfoDisplayString = (await prettifyResponse.getQuickInfoText()) ?? "";
 
       const washedQuickInfo = sanitizeString(quickInfoDisplayString);
       const washedType = sanitizeString(typeString.replace(/ } & { /g, " "));

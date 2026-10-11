@@ -1,47 +1,45 @@
-# Prettify TypeScript
+# Prettify TS 7
 
-**Get useful type information where you need it.**
+**Prettified type hovers for TypeScript 7.**
 
-[![Installs](https://img.shields.io/vscode-marketplace/i/MylesMurphy.prettify-ts)](https://marketplace.visualstudio.com/items?itemName=MylesMurphy.prettify-ts)
-[![GitHub Repo stars](https://img.shields.io/github/stars/mylesmmurphy/prettify-ts?style=social)](https://github.com/mylesmmurphy/prettify-ts)
-[![Version](https://img.shields.io/vscode-marketplace/v/MylesMurphy.prettify-ts)](https://marketplace.visualstudio.com/items?itemName=MylesMurphy.prettify-ts)
-[![License](https://img.shields.io/github/license/mylesmmurphy/prettify-ts)](https://github.com/mylesmmurphy/prettify-ts/blob/main/LICENSE)
+[![Version](https://img.shields.io/vscode-marketplace/v/danieljs-codes.prettify-ts7)](https://marketplace.visualstudio.com/items?itemName=danieljs-codes.prettify-ts7)
+[![License](https://img.shields.io/github/license/Danieljs-codes/prettify-ts7)](https://github.com/Danieljs-codes/prettify-ts7/blob/main/LICENSE)
 
-## ✨ Overview
+> [!WARNING]
+> **This code is slop.** It was written by [Claude Code](https://claude.com/claude-code). We didn't read the code at all. It passes its tests and works on our machines; beyond that, you're on your own.
 
-Prettify TS is a Visual Studio Code extension that enhances your TypeScript development experience. It provides better hover previews for TypeScript types, classes, interfaces, and more, formatted in a more readable and highly configurable way.
+A fork of [Prettify TypeScript](https://github.com/mylesmmurphy/prettify-ts) by Myles Murphy that adds support for **TypeScript 7** (the native Go port, `tsgo`). The original runs as a TS Server plugin, which TypeScript 7 can't load. This fork asks the running TypeScript 7 language server for type information over its API instead. With TypeScript 6 and earlier, it falls back to the original plugin.
 
 ## Example
 
 <img src="./assets/example.png" width="300" alt="Example Screenshot" />
 
-## Watch This
+## Requirements
 
-<a href="https://www.youtube.com/shorts/9GRzNXKVa2o" target="_blank">
-  <img src="https://raw.githubusercontent.com/mylesmmurphy/prettify-ts/refs/heads/main/assets/demo-preview.png" alt="Watch Demo Video" width="500" />
-</a>
+For TypeScript 7:
+
+- The [TypeScript (Native Preview)](https://marketplace.visualstudio.com/items?itemName=TypeScriptTeam.native-preview) extension
+- `"js/ts.experimental.useTsgo": true` in your settings
+
+Without those, the extension uses the TypeScript 6 plugin path like the original.
+
+Don't install this alongside the original Prettify TypeScript: you'd get two prettified hovers.
 
 ## Features
 
-* **Prettified Type Hovers** – Enhanced and formatted hover displays for interfaces, aliases, functions, unions, arrays, and more.
-* **Toggle Command** – Use `Toggle Preview` to quickly enable or disable prettified previews.
-* **Copy Commands** – Use `Copy Prettified Type` or `Copy Fully Prettified Type` to grab the prettified result to your clipboard.
-* **Highly Configurable** – Fine-tune output style, max depth, expansion behavior, and character limits.
+- **Prettified Type Hovers**: expanded, formatted hovers for interfaces, aliases, functions, unions, arrays, and more.
+- **Toggle Command**: `Prettify TS 7: Toggle Preview` turns previews on or off.
+- **Copy Commands**: `Copy Prettified Type` or `Copy Fully Prettified Type` put the prettified result on your clipboard.
+- **Configurable**: output style, max depth, expansion behavior, and character limits.
 
-## Prerequisites for Vue Projects
+## Limitations
 
-To use Prettify TS with Vue projects, you need:
-
-* **Vue.Volar extension** version **2.0.16** or higher
-* **For Volar v2**: Add the following configuration to your VSCode settings:
-  ```json
-  {
-    "vue.server.hybridMode": true
-  }
-  ```
-* **For Volar v3**: No additional configuration required
+- **Vue** only works through the TypeScript 6 path. TypeScript 7 Vue support would need its new content mapper API.
+- The TypeScript 7 API is still marked unstable. A future TypeScript 7 release may break this until the extension is updated.
 
 ## Extension Settings
+
+All settings are under `prettify-ts7.*`.
 
 | Setting                                 | Description                                                                                                                 |
 | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
@@ -58,25 +56,10 @@ To use Prettify TS with Vue projects, you need:
 | **Skipped Type Names**                  | List of type names that should not be expanded. Generics are supported and replaced with ellipses (e.g., `ZodObject<...>`). |
 | **Max Characters**                      | Sets a maximum character limit for output. If exceeded, the result will be truncated.                                       |
 
-## Sidebar View (Deprecated)
+## Credits
 
-As of v0.1.0, Prettify TS focuses on hover previews only and no longer includes a sidebar Type View.
-
-If you're looking for a sidebar-based type explorer, check out:
-
-* [TypeScript Explorer](https://marketplace.visualstudio.com/items?itemName=mxsdev.typescript-explorer)
-* [ts-type-expand](https://marketplace.visualstudio.com/items?itemName=kimuson.ts-type-expand)
-
-## Contributing
-
-Bug reports, suggestions, and pull requests are welcome. Visit [GitHub Issues](https://github.com/mylesmmurphy/prettify-ts/issues) to contribute.
-
-## Acknowledgements
-
-* [@mattpocock](https://github.com/mattpocock) – original inspiration via Prettify Type
-* [@willbattel](https://github.com/willbattel) – early beta testing and feedback
-* [@mattiamanzati](https://github.com/mattiamanzati) – TypeScript compiler insights
+All the original work is by [Myles Murphy](https://github.com/mylesmmurphy) and the [Prettify TypeScript contributors](https://github.com/mylesmmurphy/prettify-ts/blob/main/CONTRIBUTORS.md). The TypeScript 7 port was generated by Claude Code.
 
 ## License
 
-[MIT](https://github.com/mylesmmurphy/prettify-ts/blob/main/LICENSE)
+[MIT](https://github.com/Danieljs-codes/prettify-ts7/blob/main/LICENSE), keeping the original copyright notice.

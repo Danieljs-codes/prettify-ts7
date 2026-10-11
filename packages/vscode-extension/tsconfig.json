@@ -6,5 +6,9 @@
   "compilerOptions": {
     "outDir": "./out",
     "rootDir": "./src",
+    // Bundled by esbuild; bundler resolution is needed for the TS 7 API's package exports
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "noEmit": true,
   }
 }

@@ -34,3 +34,6 @@ jobs:
 
       - name: Run tests
         run: xvfb-run -a pnpm test
+
+      - name: Run TypeScript 7 tests
+        run: pnpm test:tsgo

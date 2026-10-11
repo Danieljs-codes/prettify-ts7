@@ -1,27 +1,28 @@
 {
-  "name": "prettify-ts",
-  "publisher": "MylesMurphy",
+  "name": "prettify-ts7",
+  "publisher": "danieljs-codes",
   "license": "MIT",
   "private": true,
-  "version": "0.3.9",
+  "version": "0.1.0",
   "main": "./out/extension.js",
   "scripts": {
-    "build": "tsc",
-    "esbuild": "esbuild ./src/extension.ts --bundle --minify --sourcemap --outfile=out/extension.js --external:vscode --format=cjs --platform=node",
+    "build": "tsc -p . && pnpm esbuild",
+    "esbuild": "esbuild ./src/extension.ts --bundle --minify --sourcemap --outfile=out/extension.js --external:vscode --format=cjs --platform=node --target=node20",
     "package": "pnpm esbuild && node ../../scripts/pre-package.js && vsce --version && vsce package --dependencies"
   },
   "dependencies": {
-    "@prettify-ts/typescript-plugin": "workspace:*"
+    "@prettify-ts7/typescript-plugin": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "18.x",
     "@types/vscode": "^1.44.0",
     "@vscode/vsce": "^3.4.2",
     "esbuild": "^0.25.5",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "tsgo-api": "npm:typescript@7.0.2"
   },
-  "displayName": "Prettify TypeScript: Better Type Previews",
-  "description": "View \"prettified\" and nested types in hover tooltips.",
+  "displayName": "Prettify TS 7: Better Type Previews",
+  "description": "Prettified, nested types in hover tooltips, for TypeScript 7 (native preview) and TypeScript 6 and earlier. Fork of Prettify TypeScript.",
   "preview": false,
   "icon": "assets/logo.png",
   "engines": {
@@ -29,7 +30,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/mylesmmurphy/prettify-ts"
+    "url": "https://github.com/Danieljs-codes/prettify-ts7"
   },
   "categories": [
     "Programming Languages",
@@ -47,113 +48,113 @@
   "contributes": {
     "typescriptServerPlugins": [
       {
-        "name": "@prettify-ts/typescript-plugin",
+        "name": "@prettify-ts7/typescript-plugin",
         "enableForWorkspaceTypeScriptVersions": true
       }
     ],
     "commands": [
       {
-        "command": "prettify-ts.toggle",
+        "command": "prettify-ts7.toggle",
         "title": "Toggle Preview",
-        "category": "Prettify TS"
+        "category": "Prettify TS 7"
       },
       {
-        "command": "prettify-ts.copyPrettifiedType",
+        "command": "prettify-ts7.copyPrettifiedType",
         "title": "Copy Prettified Type",
-        "category": "Prettify TS"
+        "category": "Prettify TS 7"
       },
       {
-        "command": "prettify-ts.fullCopyPrettifiedType",
+        "command": "prettify-ts7.fullCopyPrettifiedType",
         "title": "Copy Fully Prettified Type",
-        "category": "Prettify TS"
+        "category": "Prettify TS 7"
       }
     ],
     "menus": {
       "editor/context": [
         {
-          "submenu": "prettify.copy",
+          "submenu": "prettify-ts7.copy",
           "group": "9_cutcopypaste",
           "when": "editorLangId == 'typescript' || editorLangId == 'typescriptreact'"
         }
       ],
-      "prettify.copy": [
+      "prettify-ts7.copy": [
         {
-          "command": "prettify-ts.copyPrettifiedType"
+          "command": "prettify-ts7.copyPrettifiedType"
         },
         {
-          "command": "prettify-ts.fullCopyPrettifiedType"
+          "command": "prettify-ts7.fullCopyPrettifiedType"
         }
       ]
     },
     "submenus": [
       {
-        "id": "prettify.copy",
+        "id": "prettify-ts7.copy",
         "label": "Prettify"
       }
     ],
     "configuration": {
-      "title": "Prettify TS",
+      "title": "Prettify TS 7",
       "properties": {
-        "prettify-ts.enabled": {
+        "prettify-ts7.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable or disable Prettify TS."
+          "description": "Enable or disable Prettify TS 7."
         },
-        "prettify-ts.typeIndentation": {
+        "prettify-ts7.typeIndentation": {
           "type": "number",
           "default": 4,
           "minimum": 0
         },
-        "prettify-ts.maxDepth": {
+        "prettify-ts7.maxDepth": {
           "type": "number",
           "default": 1,
           "minimum": 0
         },
-        "prettify-ts.maxProperties": {
+        "prettify-ts7.maxProperties": {
           "type": "number",
           "default": 1000,
           "minimum": 1,
           "description": "The maximum number of properties (including sub-properties) to show in a type preview. The number of lines shown will be at most this number."
         },
-        "prettify-ts.maxSubProperties": {
+        "prettify-ts7.maxSubProperties": {
           "type": "number",
           "default": 10,
           "minimum": 1,
           "description": "The maximum number of properties to show in a nested (depth greater than 1) type."
         },
-        "prettify-ts.maxUnionMembers": {
+        "prettify-ts7.maxUnionMembers": {
           "type": "number",
           "default": 15,
           "minimum": 1,
           "description": "The maximum number of members to show in a union."
         },
-        "prettify-ts.maxFunctionSignatures": {
+        "prettify-ts7.maxFunctionSignatures": {
           "type": "number",
           "default": 5,
           "minimum": 1,
           "description": "The maximum number of function signatures to show."
         },
-        "prettify-ts.hidePrivateProperties": {
+        "prettify-ts7.hidePrivateProperties": {
           "type": "boolean",
           "default": true,
           "description": "Hide private properties on an object."
         },
-        "prettify-ts.unwrapFunctions": {
+        "prettify-ts7.unwrapFunctions": {
           "type": "boolean",
           "default": true,
           "description": "Prettify function parameters and return types."
         },
-        "prettify-ts.unwrapArrays": {
+        "prettify-ts7.unwrapArrays": {
           "type": "boolean",
           "default": true,
           "description": "Prettify array element types."
         },
-        "prettify-ts.unwrapPromises": {
+        "prettify-ts7.unwrapPromises": {
           "type": "boolean",
           "default": true,
           "description": "Prettify the resolved type of a promise."
         },
-        "prettify-ts.skippedTypeNames": {
+        "prettify-ts7.skippedTypeNames": {
           "type": "array",
           "items": {
             "type": "string"
@@ -174,7 +175,7 @@
           ],
           "description": "Types that won't be unwrapped, by name. Generic types are supported, with their arguments replaced by ellipses (e.g., `ZodObject<...>`)."
         },
-        "prettify-ts.unwrapGenericArgumentsTypeNames": {
+        "prettify-ts7.unwrapGenericArgumentsTypeNames": {
           "type": "array",
           "items": {
             "type": "string"
@@ -187,7 +188,7 @@
           ],
           "description": "A list of generic type names whose arguments will be unwrapped, instead of the apparent (final) type."
         },
-        "prettify-ts.maxCharacters": {
+        "prettify-ts7.maxCharacters": {
           "type": "number",
           "default": 20000,
           "minimum": 0,
@@ -196,5 +197,17 @@
         }
       }
     }
-  }
+  },
+  "bugs": {
+    "url": "https://github.com/Danieljs-codes/prettify-ts7/issues"
+  },
+  "homepage": "https://github.com/Danieljs-codes/prettify-ts7#readme",
+  "keywords": [
+    "typescript",
+    "typescript 7",
+    "tsgo",
+    "types",
+    "hover",
+    "prettify"
+  ]
 }

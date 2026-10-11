@@ -1,8 +1,8 @@
 {
-  "name": "prettify-ts-monorepo",
-  "publisher": "MylesMurphy",
+  "name": "prettify-ts7-monorepo",
+  "publisher": "danieljs-codes",
   "license": "MIT",
-  "version": "0.3.9",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
     "preinstall": "only-allow pnpm",
@@ -10,8 +10,9 @@
     "pretest": "tsc --project ./test/tsconfig.json && pnpm build:debug",
     "test": "vscode-test --config ./test/.vscode-test.js",
     "build": "pnpm -r run build",
-    "build:debug": "pnpm --filter @prettify-ts/typescript-plugin build:debug && pnpm --filter prettify-ts run build",
-    "package": "pnpm build && pnpm --filter prettify-ts run package && node ./scripts/post-package.js && pnpm install"
+    "build:debug": "pnpm --filter @prettify-ts7/typescript-plugin build:debug && pnpm --filter prettify-ts7 run build",
+    "package": "pnpm build && pnpm --filter prettify-ts7 run package && node ./scripts/post-package.js && pnpm install",
+    "test:tsgo": "node ./test/tsgo/build.mjs && node ./packages/vscode-extension/out-tsgo-test/run-type-tests.mjs && node ./packages/vscode-extension/out-tsgo-test/run-lsp-pipe-test.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.27.0",

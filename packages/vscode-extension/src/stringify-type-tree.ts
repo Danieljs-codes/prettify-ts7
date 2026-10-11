@@ -1,4 +1,4 @@
-import type { TypeTree } from "@prettify-ts/typescript-plugin/src/type-tree/types";
+import type { TypeTree } from "@prettify-ts7/typescript-plugin/src/type-tree/types";
 
 /**
  * Regular expression to validate an object key that does not require quotes.

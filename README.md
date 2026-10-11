@@ -1,27 +1,23 @@
-# Prettify TypeScript
+# Prettify TS 7
 
-**Get useful type information where you need it**
+**Prettified type hovers for TypeScript 7.**
 
-[![Installs](https://img.shields.io/vscode-marketplace/i/MylesMurphy.prettify-ts)](https://marketplace.visualstudio.com/items?itemName=MylesMurphy.prettify-ts)
-[![GitHub Repo stars](https://img.shields.io/github/stars/mylesmmurphy/prettify-ts?style=social)](https://github.com/mylesmmurphy/prettify-ts)
-[![Version](https://img.shields.io/vscode-marketplace/v/MylesMurphy.prettify-ts)](https://marketplace.visualstudio.com/items?itemName=MylesMurphy.prettify-ts)
-[![CI](https://github.com/mylesmmurphy/prettify-ts/actions/workflows/ci.yml/badge.svg?event=push)](https://github.com/mylesmmurphy/prettify-ts/actions/workflows/ci.yml)
-[![License](https://img.shields.io/github/license/mylesmmurphy/prettify-ts)](https://github.com/mylesmmurphy/prettify-ts/blob/main/LICENSE)
+[![Version](https://img.shields.io/vscode-marketplace/v/danieljs-codes.prettify-ts7)](https://marketplace.visualstudio.com/items?itemName=danieljs-codes.prettify-ts7)
+[![CI](https://github.com/Danieljs-codes/prettify-ts7/actions/workflows/ci.yml/badge.svg?event=push)](https://github.com/Danieljs-codes/prettify-ts7/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/Danieljs-codes/prettify-ts7)](./LICENSE)
 
-Prettify TS is a Visual Studio Code extension that enhances your TypeScript development experience. It provides hover information for TypeScript types, classes, interfaces, and more, formatted in a more readable and configurable way.
+> [!WARNING]
+> **This code is slop.** It was written by [Claude Code](https://claude.com/claude-code). We didn't read the code at all.
 
+A fork of [Prettify TypeScript](https://github.com/mylesmmurphy/prettify-ts) by Myles Murphy, with TypeScript 7 (`tsgo`) support added. TypeScript 7 can't load TS Server plugins, so the extension queries the running TypeScript 7 language server over its API pipe (`packages/vscode-extension/src/tsgo/`). With TypeScript 6 and earlier it uses the original plugin.
 
 ## Installation
 
-Install via the VSCode Marketplace:
-
-* [Prettify TS on VSCode Marketplace](https://marketplace.visualstudio.com/items?itemName=MylesMurphy.prettify-ts)
-* [Prettify TS on Open VSX](https://open-vsx.org/extension/MylesMurphy/prettify-ts)
-
+* [Prettify TS 7 on the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=danieljs-codes.prettify-ts7)
 
 ## Developer Notes
 
-This README is for developing Prettify TS. The extension README (shown on the Marketplace) is [here](./packages/vscode-extension/README.md).
+This README is for developing Prettify TS 7. The extension README (shown on the Marketplace) is [here](./packages/vscode-extension/README.md).
 
 
 ## Scripts
@@ -30,7 +26,8 @@ This README is for developing Prettify TS. The extension README (shown on the Ma
 
 ```bash
 pnpm install      # Installs all dependencies
-pnpm test         # Builds and runs the extension test suite
+pnpm test         # Builds and runs the extension test suite (TypeScript 6 path)
+pnpm test:tsgo    # Runs the hover tests against TypeScript 7, plus an LSP API pipe check
 pnpm build        # Compiles the codebase
 pnpm package      # Builds + prepares the VSIX package for publishing
 ```
@@ -52,7 +49,9 @@ This repo uses [pnpm workspaces](https://pnpm.io/workspaces) to manage multiple 
 ├── packages/
 │   ├── typescript-plugin/     # TypeScript language service plugin
 │   └── vscode-extension/      # VSCode extension host + UI
+│       └── src/tsgo/          # TypeScript 7 backend (API pipe client + type tree port)
 └── test/                      # Full integration test suite
+    └── tsgo/                  # TypeScript 7 tests, run outside VS Code
 └── scripts/                   # Utility scripts for development, building, or CI
 ```
 

@@ -65,7 +65,7 @@ export type PrettifyOptions = {
  * This request is sent when the user triggers a type information request with a specific character.
  */
 export type PrettifyRequest = {
-  meta: "prettify-type-info-request";
+  meta: "prettify-ts7-type-info-request";
   options: PrettifyOptions;
 };
 
@@ -86,6 +86,6 @@ export type PrettifyResponse = ts.WithMetadata<ts.CompletionInfo> & {
  */
 export function isPrettifyRequest(request: PrettifyCompletionsTriggerCharacter): request is PrettifyRequest {
   return (
-    !!request && typeof request === "object" && "meta" in request && request["meta"] === "prettify-type-info-request"
+    !!request && typeof request === "object" && "meta" in request && request["meta"] === "prettify-ts7-type-info-request"
   );
 }

@@ -7,7 +7,7 @@ const fs = require('fs-extra');
 const path = require('node:path');
 
 const extensionDir = path.resolve(__dirname, '../packages/vscode-extension');
-const extensionNodeModules = path.join(extensionDir, 'node_modules/@prettify-ts/typescript-plugin');
+const extensionNodeModules = path.join(extensionDir, 'node_modules/@prettify-ts7/typescript-plugin');
 
 // Clean the target directory first
 fs.removeSync(extensionNodeModules);
@@ -18,9 +18,9 @@ const extensionPkg = fs.readJsonSync(extensionPkgPath);
 
 if (
   extensionPkg.dependencies &&
-  extensionPkg.dependencies['@prettify-ts/typescript-plugin'] === '*'
+  extensionPkg.dependencies['@prettify-ts7/typescript-plugin'] === '*'
 ) {
-  extensionPkg.dependencies['@prettify-ts/typescript-plugin'] = 'workspace:*';
+  extensionPkg.dependencies['@prettify-ts7/typescript-plugin'] = 'workspace:*';
   fs.writeJsonSync(extensionPkgPath, extensionPkg, { spaces: 2 });
-  console.log('⏪ Updated @prettify-ts/typescript-plugin dependency to "workspace:*" in vscode-extension/package.json');
+  console.log('⏪ Updated @prettify-ts7/typescript-plugin dependency to "workspace:*" in vscode-extension/package.json');
 }

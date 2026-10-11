@@ -26,3 +26,4 @@ packages/*/out
 test/workspace/.vscode
 !test/workspace/.vscode/settings.json
 
+out-tsgo-test

@@ -1,0 +1,130 @@
+/**
+ * Runs the hover expectations from test/suite/types.test.ts against the TypeScript 7
+ * backend, by spawning tsgo directly instead of going through VS Code.
+ *
+ * Usage: pnpm test:tsgo
+ */
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { API } from "tsgo-api/unstable/async";
+
+import type { PrettifyOptions } from "@prettify-ts7/typescript-plugin/src/request";
+import { getTypeInfoAtPosition } from "../../packages/vscode-extension/src/tsgo/type-tree";
+import { prettyPrintTypeString, stringifyTypeTree } from "../../packages/vscode-extension/src/stringify-type-tree";
+
+// Run from the repo root
+const testDir = path.resolve("test");
+const workspaceDir = path.join(testDir, "workspace");
+
+const options: PrettifyOptions = {
+  hidePrivateProperties: true,
+  maxDepth: 3,
+  maxProperties: 100,
+  maxSubProperties: 5,
+  maxUnionMembers: 15,
+  maxFunctionSignatures: 5,
+  skippedTypeNames: [],
+  unwrapArrays: true,
+  unwrapFunctions: true,
+  unwrapGenericArgumentsTypeNames: ["Promise"],
+};
+
+function normalize(input: string): string {
+  let type = input.replace(/\s+/g, " ").trim();
+  if (type.endsWith(";")) type = type.slice(0, -1).trim();
+  return type;
+}
+
+type TestCase = { file: string; keyword: string; expected: string; knownDifference?: string };
+
+/**
+ * Cases where TypeScript 7's checker prints a type differently than TypeScript 5/6.
+ * These are reported but don't fail the run.
+ */
+const knownDifferences: Record<string, string> = {
+  TestOptionalRestTupleObj: "TS 7 prints optional tuple elements as `b?: number | undefined`",
+};
+
+/** Extra cases for behavior the VS Code suite doesn't cover, in workspace/tsgo-extra.ts */
+const extraCases: TestCase[] = [
+  { keyword: "TsgoUser(1)", expected: "function TsgoUser(id: number, name?: string): TsgoUser" },
+  { keyword: "tsgoInstance", expected: "const tsgoInstance: { readonly id: number; name?: string; greet: () => string; }" },
+  { keyword: "tsgoLet", expected: "let tsgoLet: { a: number; b: string; }" },
+  { keyword: "tsgoVar", expected: "var tsgoVar: number[]" },
+  { keyword: "TsgoPartial", expected: "type TsgoPartial = { a?: number; b?: string; }" },
+  { keyword: "TsgoReadonly", expected: "type TsgoReadonly = { readonly a: number; readonly b: string; }" },
+  { keyword: "TsgoInterface", expected: "interface TsgoInterface { x: number; nested: { y: string; z: boolean; }; }" },
+  {
+    keyword: "tsgoFunction",
+    expected:
+      "function tsgoFunction(input: { a: number; b: string; }, ...rest: string[]): { x: number; nested: { y: string; z: boolean; }; }",
+  },
+  { keyword: "TsgoImported", expected: "type TsgoImported = { value: { p: number; q: number; }; }" },
+].map((testCase) => ({ ...testCase, file: "tsgo-extra.ts" }));
+
+/** Pull `getHover("X")` / `expected = ...` pairs out of the VS Code test suite */
+function readCases(): TestCase[] {
+  const source = fs.readFileSync(path.join(testDir, "suite/types.test.ts"), "utf8");
+  const pattern = /getHover\("([^"]+)"\);\s*const expected = (?:\/\* ts \*\/ )?(`(?:[^`\\]|\\.)*`);/g;
+  const suiteCases = [...source.matchAll(pattern)].map(([, keyword, literal]) => ({
+    file: "types.ts",
+    keyword: keyword!,
+    expected: new Function(`return ${literal}`)() as string,
+    knownDifference: knownDifferences[keyword!],
+  }));
+  return [...suiteCases, ...extraCases];
+}
+
+async function main(): Promise<void> {
+  const api = new API({ cwd: workspaceDir });
+  const snapshot = await api.updateSnapshot({ openProjects: [path.join(workspaceDir, "tsconfig.json")] });
+
+  let failures = 0;
+  let known = 0;
+  const cases = readCases();
+  const started = Date.now();
+
+  for (const { file, keyword, expected, knownDifference } of cases) {
+    const fileName = path.join(workspaceDir, file);
+    const text = fs.readFileSync(fileName, "utf8");
+    const project = await snapshot.getDefaultProjectForFile(fileName);
+    const sourceFile = await project?.program.getSourceFile(fileName);
+    if (!project || !sourceFile) throw new Error(`No project for ${file}`);
+
+    const position = text.indexOf(keyword) + 1;
+    const caseStarted = Date.now();
+    const info = await getTypeInfoAtPosition(project, sourceFile, position, options);
+    const elapsed = Date.now() - caseStarted;
+
+    const actual = info
+      ? normalize(info.declaration + prettyPrintTypeString(stringifyTypeTree(info.typeTree, false), 4))
+      : "<no type info>";
+
+    if (actual === normalize(expected)) {
+      console.log(`  ✓ ${keyword} (${elapsed}ms)`);
+      continue;
+    }
+
+    const details = `\n      expected: ${normalize(expected)}\n      actual:   ${actual}`;
+    if (knownDifference) {
+      known++;
+      console.log(`  ~ ${keyword} (known TS 7 difference: ${knownDifference})${details}`);
+    } else {
+      failures++;
+      console.log(`  ✗ ${keyword} (${elapsed}ms)${details}`);
+    }
+  }
+
+  const passed = cases.length - failures - known;
+  console.log(`\n${passed}/${cases.length} passed, ${known} known differences, ${failures} failed in ${Date.now() - started}ms`);
+  await snapshot.dispose();
+  await api.close();
+  process.exitCode = failures > 0 ? 1 : 0;
+}
+
+main()
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  })
+  .finally(() => process.exit());
