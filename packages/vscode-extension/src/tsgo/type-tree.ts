@@ -585,6 +585,13 @@ async function getTypeTree(context: Context, type: Type, depth: number, visited:
       return { kind: "reference", typeName };
     }
 
+    // Nothing to list for a generic mapped type like `Record<K, T>` (K is unknown), so
+    // show its definition, `{ [P in K]: T; }`, rather than `{}`
+    if (typeProperties.length === 0 && indexSignatures.length === 0) {
+      const definition = await cached.typeToString(type, NoTruncation | InTypeAlias);
+      if (definition !== "{}") return { kind: "reference", typeName: definition };
+    }
+
     if (depth >= options.maxDepth) {
       // If we've reached the max depth and has a type alias, return it as a reference type
       // Otherwise, return an object with the properties count

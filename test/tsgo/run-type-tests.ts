@@ -95,6 +95,27 @@ const extraCases: TestCase[] = [
   { keyword: "TsgoImported", expected: "type TsgoImported = { value: { p: number; q: number; }; }" },
 ].map((testCase) => ({ ...testCase, file: "tsgo-extra.ts" }));
 
+/** Cases in workspace/tsgo-depth.ts */
+const depthCases: TestCase[] = [
+  // A generic mapped type has no properties to list until K is known, so show its definition
+  { keyword: 'Record<"a"', expected: "type Record = { [P in K]: T; }" },
+  { keyword: "DepthRecord =", expected: "type DepthRecord = { a: number; b: number; }" },
+  {
+    // Fields nested inside union members expand (within maxDepth)
+    keyword: "DepthAny =",
+    expected: `type DepthAny = {
+      readonly instructions: string;
+      readonly criteria: { [key: string]: string; };
+    } | {
+      readonly instructions: string;
+      readonly criteria: readonly string[];
+    } | {
+      readonly instructions: string;
+      readonly criteria?: { readonly min: string; readonly max: string; };
+    }`,
+  },
+].map((testCase) => ({ ...testCase, file: "tsgo-depth.ts" }));
+
 /** The `prettify-ts7.readonlyStyle: "generic"` setting */
 const genericReadonlyCases: TestCase[] = [
   {
@@ -147,7 +168,7 @@ function readCases(): TestCase[] {
     expected: literal!.slice(1, -1).replace(/\\(.)/g, "$1"),
     knownDifference: knownDifferences[keyword!],
   }));
-  return [...suiteCases, ...extraCases, ...genericReadonlyCases];
+  return [...suiteCases, ...extraCases, ...depthCases, ...genericReadonlyCases];
 }
 
 async function main(): Promise<void> {
