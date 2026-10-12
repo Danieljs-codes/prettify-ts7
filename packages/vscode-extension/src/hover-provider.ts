@@ -2,6 +2,8 @@ import * as vscode from "vscode";
 import { prettyPrintTypeString, stringifyTypeTree, sanitizeString } from "./stringify-type-tree";
 import { getPrettifyOptions, getTypeInfo } from "./type-info";
 
+const MAX_READABLE_QUICK_INFO_LENGTH = 100;
+
 export function registerHoverProvider(context: vscode.ExtensionContext): void {
   async function provideHover(
     document: vscode.TextDocument,
@@ -48,7 +50,12 @@ export function registerHoverProvider(context: vscode.ExtensionContext): void {
       const washedQuickInfo = sanitizeString(quickInfoDisplayString);
       const washedType = sanitizeString(typeString.replace(/ } & { /g, " "));
 
-      if (washedQuickInfo.includes(washedType)) return;
+      // Same content is still worth showing when TS renders it as one hard-to-read line
+      const quickInfoIsLongLine =
+        !quickInfoDisplayString.includes("\n") && quickInfoDisplayString.length > MAX_READABLE_QUICK_INFO_LENGTH;
+      const prettifiedIsMultiline = prettyTypeString.trim().includes("\n");
+
+      if (washedQuickInfo.includes(washedType) && !(quickInfoIsLongLine && prettifiedIsMultiline)) return;
     }
 
     const hoverText = new vscode.MarkdownString();

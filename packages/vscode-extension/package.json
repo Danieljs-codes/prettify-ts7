@@ -3,7 +3,7 @@
   "publisher": "danieljs-codes",
   "license": "MIT",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.2",
   "main": "./out/extension.js",
   "scripts": {
     "build": "tsc -p . && pnpm esbuild",

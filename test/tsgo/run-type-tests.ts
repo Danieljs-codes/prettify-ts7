@@ -26,7 +26,7 @@ const options: PrettifyOptions = {
   skippedTypeNames: [],
   unwrapArrays: true,
   unwrapFunctions: true,
-  unwrapGenericArgumentsTypeNames: ["Promise"],
+  unwrapGenericArgumentsTypeNames: ["Promise", "TsgoEffect"],
 };
 
 function normalize(input: string): string {
@@ -59,8 +59,27 @@ const extraCases: TestCase[] = [
   { keyword: "TsgoInterface", expected: "interface TsgoInterface { x: number; nested: { y: string; z: boolean; }; }" },
   {
     keyword: "tsgoFunction",
-    expected:
-      "function tsgoFunction(input: { a: number; b: string; }, ...rest: string[]): { x: number; nested: { y: string; z: boolean; }; }",
+    expected: `function tsgoFunction(
+      input: { a: number; b: string; },
+      ...rest: string[]
+    ): { x: number; nested: { y: string; z: boolean; }; }`,
+  },
+  {
+    keyword: "tsgoForEach(",
+    expected: `function tsgoForEach(
+      self: readonly (readonly [id: number, name: string])[],
+      f: (a: readonly [id: number, name: string], i: number) => Promise<void>,
+      options?: { readonly concurrency?: number | "unbounded"; readonly discard?: true; }
+    ): Promise<void>`,
+  },
+  {
+    // At a call site: the overload and generics TypeScript resolved, not the generic declaration
+    keyword: "tsgoEffectForEach(tsgoRows",
+    expected: `function tsgoEffectForEach(
+      self: Iterable<readonly [id: number, name: string]>,
+      f: (a: readonly [id: number, name: string], i: number) => TsgoEffect<number, never, never>,
+      options: { readonly concurrency?: number | "unbounded"; readonly discard: true; }
+    ): TsgoEffect<void, never, never>`,
   },
   { keyword: "TsgoImported", expected: "type TsgoImported = { value: { p: number; q: number; }; }" },
 ].map((testCase) => ({ ...testCase, file: "tsgo-extra.ts" }));

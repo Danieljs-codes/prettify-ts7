@@ -272,7 +272,8 @@ function printResults(result: BenchResult, baseline: BenchResult | undefined): v
     const b = baseline?.cases[name];
     totalMedian += c.medianMs;
     baselineTotal += b?.medianMs ?? 0;
-    if (b && b.output !== c.output) changedOutputs.push(name);
+    // Whitespace is layout, not content, so formatting changes don't count as different output
+    if (b && b.output.replace(/\s+/g, "") !== c.output.replace(/\s+/g, "")) changedOutputs.push(name);
 
     console.log(
       name.padEnd(22) +

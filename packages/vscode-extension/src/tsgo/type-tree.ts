@@ -19,11 +19,13 @@ import {
   NodeFlags,
   SyntaxKind,
   getTouchingPropertyName,
+  isCallExpression,
   isClassDeclaration,
   isImportClause,
   isImportDeclaration,
   isImportSpecifier,
   isParameterDeclaration,
+  isPropertyAccessExpression,
   isPropertyDeclaration,
   isPropertySignatureDeclaration,
   isVariableDeclaration,
@@ -211,6 +213,24 @@ export async function getTypeInfoAtPosition(
     }
   }
 
+  // At a call site, show the signature TypeScript resolved for these arguments (generics
+  // instantiated, overload picked), like quick info does, instead of the generic declaration
+  const call = getCallOfCallee(node);
+  const resolvedSignature = call ? await checker.getResolvedSignature(call) : undefined;
+  if (resolvedSignature) {
+    const [signature, quickInfoTypeString] = await Promise.all([
+      getSignatureTypeInfo(context, resolvedSignature, 0, new Set()),
+      checker.typeToString(type, undefined, InTypeAlias),
+    ]);
+
+    return {
+      typeTree: { kind: "function", typeName: name, excessSignatures: 0, signatures: [signature] },
+      declaration: getSyntaxKindDeclaration(syntaxKind, name),
+      name,
+      quickInfoTypeString,
+    };
+  }
+
   // If the symbol has a declared type, use that when available
   // Don't use declared type for variable declarations
   const shouldUseDeclaredType = firstDeclarationKind !== SyntaxKind.VariableDeclaration;
@@ -312,6 +332,44 @@ async function getParameterTypeInfo(
     optional: isParameter && !!declaration.questionToken,
     type: parameterType ? await getTypeTree(context, parameterType, depth, visited) : anyTypeTree(),
   };
+}
+
+async function getSignatureTypeInfo(
+  context: Context,
+  signature: Signature,
+  depth: number,
+  visited: Set<number>,
+): Promise<TypeFunctionSignature> {
+  const [returnType, params] = await Promise.all([
+    context.cached.getReturnTypeOfSignature(signature),
+    context.cached.getParameters(signature),
+  ]);
+
+  const [returnTypeTree, parameters] = await Promise.all([
+    returnType ? getTypeTree(context, returnType, depth, new Set(visited)) : anyTypeTree(),
+    getParameterTypeInfos(context, params, depth, visited),
+  ]);
+
+  return { returnType: returnTypeTree, parameters };
+}
+
+/**
+ * The call expression when `node` is the function being called, e.g. `forEach` in
+ * `forEach(...)` or `Effect.forEach(...)`
+ */
+function getCallOfCallee(node: Node): Node | undefined {
+  let callee = node;
+  const parent = node.parent;
+  if (parent && isPropertyAccessExpression(parent) && isSameNode(parent.name, node)) {
+    callee = parent;
+  }
+
+  const call = callee.parent;
+  return call && isCallExpression(call) && isSameNode(call.expression, callee) ? call : undefined;
+}
+
+function isSameNode(a: Node, b: Node): boolean {
+  return a.kind === b.kind && a.pos === b.pos && a.end === b.end;
 }
 
 /**
@@ -417,20 +475,10 @@ async function getTypeTree(context: Context, type: Type, depth: number, visited:
       depth = options.maxDepth;
     }
 
-    const signatures: TypeFunctionSignature[] = await Promise.all(
-      callSignatures.slice(0, options.maxFunctionSignatures).map(async (signature) => {
-        const [returnType, params] = await Promise.all([
-          cached.getReturnTypeOfSignature(signature),
-          cached.getParameters(signature),
-        ]);
-
-        const [returnTypeTree, parameters] = await Promise.all([
-          returnType ? getTypeTree(context, returnType, depth, new Set(visited)) : anyTypeTree(),
-          getParameterTypeInfos(context, params, depth, visited),
-        ]);
-
-        return { returnType: returnTypeTree, parameters };
-      }),
+    const signatures = await Promise.all(
+      callSignatures
+        .slice(0, options.maxFunctionSignatures)
+        .map((signature) => getSignatureTypeInfo(context, signature, depth, visited)),
     );
 
     // If there are more signatures than the max allowed, count them as excess
@@ -497,11 +545,11 @@ async function getTypeTree(context: Context, type: Type, depth: number, visited:
       const targetTypeName = fullTargetTypeName.split("<")[0]?.trim() ?? fullTargetTypeName;
 
       // Skip generic types that are in the skippedTypeNames list, using ellipsis to indicate generic parameters
-      if (options.skippedTypeNames.includes(targetTypeName)) {
+      if (matchesTypeName(options.skippedTypeNames, targetTypeName)) {
         return { kind: "reference", typeName: `${targetTypeName}<...>` };
       }
 
-      if (options.unwrapGenericArgumentsTypeNames.includes(targetTypeName)) {
+      if (matchesTypeName(options.unwrapGenericArgumentsTypeNames, targetTypeName)) {
         return {
           kind: "generic",
           typeName: targetTypeName,
@@ -523,12 +571,19 @@ async function getTypeTree(context: Context, type: Type, depth: number, visited:
     // Resolve how many properties to show based on the maxProperties option
     const depthMaxProps = depth >= 1 ? options.maxSubProperties : options.maxProperties;
 
+    const hadProperties = typeProperties.length > 0;
     if (options.hidePrivateProperties) {
       const isPublic = await Promise.all(typeProperties.map((symbol) => isPublicProperty(context, symbol)));
       typeProperties = typeProperties.filter((_, index) => isPublic[index]);
     }
 
     let indexSignatures = await cached.getIndexInfosOfType(apparentType);
+
+    // Every member was hidden (e.g. Iterable's only member is [Symbol.iterator]), so `{}`
+    // would misrepresent the type; show its name instead
+    if (typeProperties.length === 0 && indexSignatures.length === 0 && hadProperties) {
+      return { kind: "reference", typeName };
+    }
 
     if (depth >= options.maxDepth) {
       // If we've reached the max depth and has a type alias, return it as a reference type
@@ -605,6 +660,20 @@ function getIndexIdentifierName(declaration: Node | undefined): string {
   } catch {
     return "key";
   }
+}
+
+/**
+ * Whether a configured type name matches, ignoring how the checker qualified it:
+ * "Effect" matches `Effect`, `Effect.Effect`, and `import("effect").Effect`
+ */
+function matchesTypeName(names: readonly string[], typeName: string): boolean {
+  if (names.includes(typeName)) return true;
+  const unqualified =
+    typeName
+      .replace(/^import\(".*?"\)\./, "")
+      .split(".")
+      .pop() ?? typeName;
+  return names.includes(unqualified);
 }
 
 /**

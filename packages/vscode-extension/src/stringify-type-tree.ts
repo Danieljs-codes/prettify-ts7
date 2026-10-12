@@ -7,6 +7,21 @@ import type { TypeTree } from "@prettify-ts7/typescript-plugin/src/type-tree/typ
 const unquotedObjectKeyRegex = /^(?:\d+|[a-zA-Z_$][\w$]*|\[.*\])$/;
 
 /**
+ * Markers for a parameter list that prettyPrintTypeString should put one parameter per line.
+ * Control characters can't appear in type text, and are stripped when not pretty printing.
+ */
+const PARAMS_OPEN = "\u0001";
+const PARAMS_SEPARATOR = "\u0002";
+const PARAMS_CLOSE = "\u0003";
+
+/** Parameter lists longer than this, or mixing an object with other parameters, go one per line */
+const MAX_INLINE_PARAMETERS_LENGTH = 60;
+
+export function stripLayoutMarkers(typeString: string): string {
+  return typeString.split(PARAMS_OPEN).join("").split(PARAMS_SEPARATOR).join(", ").split(PARAMS_CLOSE).join("");
+}
+
+/**
  * Uses type info to return a string representation of the type
  *
  * Example:
@@ -62,7 +77,12 @@ export function stringifyTypeTree(typeTree: TypeTree, anonymousFunction = true):
 
   if (typeTree.kind === "array") {
     let elementTypeString = stringifyTypeTree(typeTree.elementType);
-    if (elementTypeString.includes("|") || elementTypeString.includes("&")) {
+    if (
+      elementTypeString.includes("|") ||
+      elementTypeString.includes("&") ||
+      elementTypeString.startsWith("readonly ") ||
+      elementTypeString.includes("=>")
+    ) {
       elementTypeString = `(${elementTypeString})`;
     }
 
@@ -88,8 +108,17 @@ export function stringifyTypeTree(typeTree: TypeTree, anonymousFunction = true):
       });
 
       const parametersString = parametersArray.join(", ");
+      const hasObjectParameter = parametersArray.some((p) => p.includes("{"));
+      const breakParameters =
+        parametersArray.length > 0 &&
+        (stripLayoutMarkers(parametersString).length > MAX_INLINE_PARAMETERS_LENGTH ||
+          (parametersArray.length > 1 && hasObjectParameter));
 
-      return `(${parametersString})${returnTypeChar} ${stringifyTypeTree(returnType)}`;
+      const parametersBlock = breakParameters
+        ? `${PARAMS_OPEN}${parametersArray.join(PARAMS_SEPARATOR)}${PARAMS_CLOSE}`
+        : parametersString;
+
+      return `(${parametersBlock})${returnTypeChar} ${stringifyTypeTree(returnType)}`;
     });
 
     // If there are multiple signatures, wrap them in braces with semi-colons at the end of each line
@@ -125,13 +154,20 @@ export function prettyPrintTypeString(typeStringInput: string, indentation = 2):
     .replace(/typeof import\(".*?node_modules\/(.*?)"\)/g, 'typeof import("$1")')
     .replace(/ } & { /g, " ");
 
-  if (indentation < 1) return typeString;
+  if (indentation < 1) return stripLayoutMarkers(typeString);
 
-  // Add newline after braces and semicolons
+  // Add newline after braces and semicolons, and around broken-up parameter lists.
+  // Parameter list lines keep their marker so the loop below can indent them.
   const splitTypeString = typeString
     .replace(/{/g, "{\n")
     .replace(/}/g, "\n}")
-    .replace(/(\S); /g, "$1;\n ");
+    .replace(/(\S); /g, "$1;\n ")
+    .split(PARAMS_OPEN)
+    .join(`${PARAMS_OPEN}\n`)
+    .split(PARAMS_SEPARATOR)
+    .join(`,\n`)
+    .split(PARAMS_CLOSE)
+    .join(`\n${PARAMS_CLOSE}`);
 
   let depth = 0;
   let result = "";
@@ -144,16 +180,16 @@ export function prettyPrintTypeString(typeStringInput: string, indentation = 2):
     // Replace true/false with boolean
     line = line.replace("false | true", "boolean");
 
-    const hasOpenBrace = line.includes("{");
-    const hasCloseBrace = line.includes("}");
+    const opens = line.endsWith("{") || line.endsWith(PARAMS_OPEN);
+    const closes = line.startsWith("}") || line.startsWith(PARAMS_CLOSE);
 
-    if (hasCloseBrace) {
+    if (closes) {
       depth--;
     }
 
-    result += " ".repeat(indentation).repeat(depth) + line + "\n";
+    result += " ".repeat(indentation).repeat(Math.max(0, depth)) + stripLayoutMarkers(line) + "\n";
 
-    if (hasOpenBrace) {
+    if (opens) {
       depth++;
     }
   }
@@ -171,7 +207,7 @@ export function prettyPrintTypeString(typeStringInput: string, indentation = 2):
  * Sanitizes a string by removing leading words, whitespace, newlines, and semicolons
  */
 export function sanitizeString(str: string): string {
-  return str
+  return stripLayoutMarkers(str)
     .replace(/^[a-z]+\s/, "") // Remove the leading word, ex: type, const, interface
     .replace(/\s/g, "") // Remove all whitespace
     .replace(/\n/g, "") // Remove all newlines
