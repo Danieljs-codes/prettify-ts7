@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { stringifyTypeTree, prettyPrintTypeString } from "./stringify-type-tree";
+import { stringifyTypeTree, prettyPrintTypeString, type ReadonlyStyle } from "./stringify-type-tree";
 import { getPrettifyOptions, getTypeInfo } from "./type-info";
 
 // MAX_SETTINGS is an extremely high constant used to represent "unlimited" or "maximum possible" settings.
@@ -43,7 +43,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
 
     const { typeTree, declaration } = prettifyResponse;
 
-    const typeString = stringifyTypeTree(typeTree, false);
+    const typeString = stringifyTypeTree(typeTree, false, config.get<ReadonlyStyle>("readonlyStyle", "keyword"));
     const prettyTypeString = prettyPrintTypeString(typeString, indentation);
 
     await vscode.env.clipboard.writeText(declaration + prettyTypeString);

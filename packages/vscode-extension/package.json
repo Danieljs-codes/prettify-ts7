@@ -3,7 +3,7 @@
   "publisher": "danieljs-codes",
   "license": "MIT",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.4",
   "main": "./out/extension.js",
   "scripts": {
     "build": "tsc -p . && pnpm esbuild",
@@ -148,6 +148,19 @@
           "type": "boolean",
           "default": true,
           "description": "Prettify array element types."
+        },
+        "prettify-ts7.readonlyStyle": {
+          "type": "string",
+          "enum": [
+            "keyword",
+            "generic"
+          ],
+          "enumDescriptions": [
+            "readonly T[] and readonly [A, B]",
+            "ReadonlyArray<T> and Readonly<[A, B]>"
+          ],
+          "default": "keyword",
+          "description": "How readonly arrays and tuples are written."
         },
         "prettify-ts7.unwrapPromises": {
           "type": "boolean",

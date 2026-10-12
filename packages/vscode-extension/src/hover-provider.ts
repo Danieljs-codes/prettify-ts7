@@ -1,10 +1,15 @@
 import * as vscode from "vscode";
-import { prettyPrintTypeString, stringifyTypeTree, sanitizeString } from "./stringify-type-tree";
+import { prettyPrintTypeString, stringifyTypeTree, sanitizeString, type ReadonlyStyle } from "./stringify-type-tree";
 import { getPrettifyOptions, getTypeInfo } from "./type-info";
 
 const MAX_READABLE_QUICK_INFO_LENGTH = 100;
 
-export function registerHoverProvider(context: vscode.ExtensionContext): void {
+/**
+ * Registers the hover provider. Returns a function that registers it again, which moves
+ * Prettify's hover above other providers': VS Code shows equally specific providers
+ * newest first.
+ */
+export function registerHoverProvider(context: vscode.ExtensionContext): () => void {
   async function provideHover(
     document: vscode.TextDocument,
     position: vscode.Position,
@@ -26,7 +31,7 @@ export function registerHoverProvider(context: vscode.ExtensionContext): void {
 
     if (options.skippedTypeNames.includes(name)) return;
 
-    const typeString = stringifyTypeTree(typeTree, false);
+    const typeString = stringifyTypeTree(typeTree, false, config.get<ReadonlyStyle>("readonlyStyle", "keyword"));
     let prettyTypeString = prettyPrintTypeString(typeString, indentation);
 
     if (prettyTypeString.length > maxCharacters) {
@@ -63,7 +68,19 @@ export function registerHoverProvider(context: vscode.ExtensionContext): void {
     return new vscode.Hover(hoverText);
   }
 
-  context.subscriptions.push(vscode.languages.registerHoverProvider("typescript", { provideHover }));
-  context.subscriptions.push(vscode.languages.registerHoverProvider("typescriptreact", { provideHover }));
-  context.subscriptions.push(vscode.languages.registerHoverProvider("vue", { provideHover }));
+  let registrations: vscode.Disposable[] = [];
+  const unregister = () => {
+    for (const registration of registrations) registration.dispose();
+  };
+  context.subscriptions.push({ dispose: unregister });
+
+  const register = () => {
+    unregister();
+    registrations = ["typescript", "typescriptreact", "vue"].map((language) =>
+      vscode.languages.registerHoverProvider(language, { provideHover }),
+    );
+  };
+
+  register();
+  return register;
 }

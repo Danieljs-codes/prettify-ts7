@@ -51,6 +51,7 @@ All settings are under `prettify-ts7.*`.
 | **Max Function Signatures**             | Limits the number of function signatures shown. Excess signatures will be replaced with ellipsis.                           |
 | **Unwrap Functions**                    | If enabled, expands function parameter and return types.                                                                    |
 | **Unwrap Arrays**                       | If enabled, expands the element types of arrays.                                                                            |
+| **Readonly Style**                      | `keyword` writes `readonly T[]` and `readonly [A, B]`; `generic` writes `ReadonlyArray<T>` and `Readonly<[A, B]>`. [Details](https://github.com/Danieljs-codes/prettify-ts7/blob/main/docs/readonly-style.md) |
 | **Unwrap Generic Arguments Type Names** | A list of generic type names whose arguments should be unwrapped instead of using their resolved output (e.g., `Promise`).  |
 | **Hide Private Properties**             | If enabled, hides properties or methods marked private.                                                                     |
 | **Skipped Type Names**                  | List of type names that should not be expanded. Generics are supported and replaced with ellipses (e.g., `ZodObject<...>`). |

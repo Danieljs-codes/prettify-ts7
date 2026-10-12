@@ -41,6 +41,16 @@ async function getTsgoExtensionApi(): Promise<TsgoExtensionApi | undefined> {
 }
 
 /**
+ * Calls `listener` each time the TypeScript 7 language server starts (and right away if
+ * it's already running). Does nothing when TypeScript 7 isn't in use.
+ */
+export async function onTsgoServerInitialized(context: vscode.ExtensionContext, listener: () => void): Promise<void> {
+  if (!isTsgoEnabled()) return;
+  const extensionApi = await getTsgoExtensionApi();
+  if (extensionApi) context.subscriptions.push(extensionApi.onLanguageServerInitialized(listener));
+}
+
+/**
  * Connects to the running TypeScript 7 language server's API pipe, reusing the connection
  * until the server restarts
  */
